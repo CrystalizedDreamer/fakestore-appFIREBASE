@@ -31,3 +31,14 @@ The Cart does in fact persist via session memory
 I went step by step through the rubric to make sure I hit every checkbox. 
 In the future though it may be more beneficial to read the entire thing first, As I originally proceeded entirely with contextAPI until realizing REDUX was a requirement.
 
+*************************************************************************************
+
+1.66 update
+
+Fakestore api has been removed and supplanted by firebase and firestore. Truly this is wonderful. This has been a wonderful experience with a wonderful Backend-as-a-service tool.
+Logic has also been created for generating order numbers and making sure they are unique.
+
+I am quite pleased with this.
+
+The order and product creation logics were also connected with firestore so the app can be created and manipulated on the fly.
+
