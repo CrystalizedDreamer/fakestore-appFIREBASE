@@ -11,6 +11,14 @@ import AddProducts  from './components/addProducts.jsx';
 import Home from './components/home.jsx';
 
 
+import Login from './components/Login.jsx';
+import Register from './components/Register.jsx';
+import Profile from './components/Profile.jsx';
+import { logout } from './authService';
+import { auth } from './Firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+
+
 
 function App() {
   // State to control cart modal visibility
@@ -22,6 +30,15 @@ function App() {
   const total = cart.reduce((sum, item) => sum + Number(item.price) * (item.quantity || 1), 0);
   // Calculate total quantity of items in cart
   const totalQuantity = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
+
+  // Track auth state
+  const [user, setUser] = React.useState(null);
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   return (
     <>
@@ -38,10 +55,27 @@ function App() {
               <li className="nav-item">
                 <Link className="nav-link" to="/add-products">Add Products</Link>
               </li>
+              {!user && (
+                <li className="nav-item">
+                  <Link className="nav-link" to="/login">Login</Link>
+                </li>
+              )}
             </ul>
-            <button className="btn btn-success ms-auto" onClick={() => setShowCart(true)}>
-              View Cart ({totalQuantity})
-            </button>
+            <div className="d-flex align-items-center ms-auto">
+              {user && (
+                <Link to="/profile" className="text-light me-3" style={{ textDecoration: 'underline', cursor: 'pointer' }}>
+                  Welcome {user.email}
+                </Link>
+              )}
+              <button className="btn btn-success me-2" onClick={() => setShowCart(true)}>
+                View Cart ({totalQuantity})
+              </button>
+              {user && (
+                <button className="btn btn-outline-light" onClick={logout}>
+                  Logout
+                </button>
+              )}
+            </div>
           </div>
         </nav>
 
@@ -71,6 +105,9 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/products" element={<Products />} />
           <Route path="/add-products" element={<AddProducts />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </Router>
     </>

@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { db } from '../Firebase';
+import { addDoc, collection } from 'firebase/firestore';
 function AddProducts(){
 
    const [form, setForm] = useState({
@@ -29,13 +31,8 @@ function AddProducts(){
       image: "https://upload.wikimedia.org/wikipedia/commons/6/65/No-Image-Placeholder.svg",
     };
     try {
-      const res = await fetch('https://fakestoreapi.com/products', {
-        method: 'POST',
-        body: JSON.stringify(product),
-        headers: { 'Content-Type': 'application/json' }
-      });
-      await res.json();
-      setMessage('Product added! (FakeStore API does not really DO new products, but yeah, good job.)');
+      await addDoc(collection(db, 'products'), product);
+      setMessage('Product added to Firestore!');
       setForm({
         productName: '',
         productPrice: '',

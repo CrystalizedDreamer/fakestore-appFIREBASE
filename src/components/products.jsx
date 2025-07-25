@@ -1,13 +1,15 @@
 
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { useDispatch } from 'react-redux';
-import { addToCart } from '../store';
-import { useQuery } from '@tanstack/react-query';
+import ProductCard from './ProductCard';
+import CategoryFilter from './CategoryFilter';
 import ProductDetailsModal from './ProductDetailsModal';
 import EditProductModal from './EditProductModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
-
-
+import { db } from '../Firebase';
+import { collection, getDocs, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { addToCart } from '../store';
 
 // Products component displays the list of products and handles product modals and cart actions
 function Products() {
@@ -31,33 +33,72 @@ function Products() {
   });
   // State for selected category
   const [selectedCategory, setSelectedCategory] = useState('all');
+  // State for products and categories
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
-  // Fetch categories from FakeStoreAPI
-  const { data: categories = [], isLoading: loadingCategories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: async () => {
-      const res = await fetch('https://fakestoreapi.com/products/categories');
-      if (!res.ok) throw new Error('Failed to fetch categories');
-      return res.json();
-    },
-  });
-
-  // Fetch products, filtered by category if selected
-  const { data: products = [], isLoading: loading, refetch } = useQuery({
-    queryKey: ['products', selectedCategory],
-    queryFn: async () => {
-      let url = 'https://fakestoreapi.com/products';
+  // Fetch all products from Firestore, optionally filtered by category
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      let q = collection(db, 'products');
+      // If a category is selected, filter by category
       if (selectedCategory && selectedCategory !== 'all') {
-        url = `https://fakestoreapi.com/products/category/${encodeURIComponent(selectedCategory)}`;
+        q = query(collection(db, 'products'), where('category', '==', selectedCategory));
       }
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Network response was not ok');
-      return res.json();
-    },
-  });
+      const querySnapshot = await getDocs(q);
+      const productsArr = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      setProducts(productsArr);
+    } catch (err) {
+      alert('Error fetching products: ' + err.message);
+    }
+    setLoading(false);
+  };
+
+  // Fetch all unique categories from Firestore
+  const fetchCategories = async () => {
+    setLoadingCategories(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'products'));
+      const allCategories = querySnapshot.docs.map(docSnap => docSnap.data().category);
+      const uniqueCategories = Array.from(new Set(allCategories)).filter(Boolean);
+      setCategories(uniqueCategories);
+    } catch (err) {
+      alert('Error fetching categories: ' + err.message);
+    }
+    setLoadingCategories(false);
+  };
+
+  // Fetch products when selectedCategory changes
+  useEffect(() => {
+    // Define fetchProducts inside useEffect to avoid dependency issues
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        let q = collection(db, 'products');
+        // If a category is selected, filter by category
+        if (selectedCategory && selectedCategory !== 'all') {
+          q = query(collection(db, 'products'), where('category', '==', selectedCategory));
+        }
+        const querySnapshot = await getDocs(q);
+        const productsArr = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        setProducts(productsArr);
+      } catch (err) {
+        alert('Error fetching products: ' + err.message);
+      }
+      setLoading(false);
+    };
+    fetchProducts();
+  }, [selectedCategory]);
+  useEffect(() => {
+    fetchCategories();
+    //
+  }, []);
 
   // Clear edit message after 3 seconds
-  React.useEffect(() => {
+  useEffect(() => {
     if (editMessage) {
       const timer = setTimeout(() => setEditMessage(""), 3000);
       return () => clearTimeout(timer);
@@ -76,84 +117,37 @@ function Products() {
         </div>
       )}
 
-      {/* Category Filter Dropdown */}
-      <div className="mb-4">
-        <label htmlFor="categoryFilter" className="form-label me-2">Filter by Category:</label>
-        <select
-          id="categoryFilter"
-          className="form-select d-inline-block w-auto"
-          value={selectedCategory}
-          onChange={e => setSelectedCategory(e.target.value)}
-        >
-          <option value="all">All</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-      </div>
+      {/* Category Filter Dropdown (moved to CategoryFilter component) */}
+      <CategoryFilter
+        categories={categories}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+      />
 
       <div className="row">
-        {/* Render each product card */}
+        {/* Render each product card using ProductCard component */}
         {products.map((product) => (
-          <div
-            className="col-12 col-sm-6 col-md-3 mb-4 mt-4 pt-2 pb-2"
+          <ProductCard
             key={product.id}
-          >
-            <div className="card h-100" id="productCard">
-              <img
-                src={product.image}
-                className="card-img-top"
-                alt={product.title}
-              />
-              <div className="cardBody">
-                <h5 className="card-title">{product.title}</h5>
-                <p className="card-text">${product.price}</p>
-                <p className="card-text">{product.category}</p>
-                <p className="card-text" style={{ fontSize: "0.9em" }}>
-                  {product.description.substring(0, 80)}...
-                </p>
-                <div className="d-flex flex-column gap-2 mt-auto">
-                  {/* Open edit modal and populate form with product data */}
-                  <button
-                    className="btn btn-outline-warning w-100"
-                    onClick={() => {
-                      setEditProduct(product);
-                      setEditForm({
-                        title: product.title,
-                        price: product.price,
-                        category: product.category,
-                        description: product.description,
-                        image: product.image,
-                      });
-                    }}
-                  >
-                    Edit
-                  </button>
-                  {/* Open product details modal */}
-                  <button
-                    className="btn btn-outline-secondary btn-sm w-100"
-                    onClick={() => setModalProduct(product)}
-                  >
-                    Details
-                  </button>
-                  {/* Add product to cart using Redux */}
-                  <button
-                    className="btn btn-primary btn-sm w-100"
-                    onClick={() => dispatch(addToCart(product))}
-                  >
-                    Add to Cart
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+            product={product}
+            onEdit={() => {
+              setEditProduct(product);
+              setEditForm({
+                title: product.title,
+                price: product.price,
+                category: product.category,
+                description: product.description,
+                image: product.image,
+              });
+            }}
+            onDetails={() => setModalProduct(product)}
+            onAddToCart={() => dispatch(addToCart(product))}
+          />
         ))}
       </div>
       {/* Product Details Modal */}
-      {/* Product Details Modal */}
       <ProductDetailsModal product={modalProduct} onClose={() => setModalProduct(null)} />
-      {/* Edit Product Modal */}
-      {/* Edit Product Modal with update logic */}
+      {/* Edit Product Modal with update logic using Firestore */}
       <EditProductModal
         editProduct={editProduct}
         editForm={editForm}
@@ -161,20 +155,14 @@ function Products() {
         onClose={() => setEditProduct(null)}
         onDelete={() => setShowDeleteConfirm(true)}
         onSubmit={async (e) => {
-          // Handle product update
+          // Handle product update in Firestore
           e.preventDefault();
           try {
-            await fetch(
-              `https://fakestoreapi.com/products/${editProduct.id}`,
-              {
-                method: "PUT",
-                body: JSON.stringify({
-                  ...editForm,
-                  price: parseFloat(editForm.price),
-                }),
-                headers: { "Content-Type": "application/json" },
-              }
-            );
+            const productRef = doc(db, 'products', editProduct.id);
+            await updateDoc(productRef, {
+              ...editForm,
+              price: parseFloat(editForm.price),
+            });
             setEditProduct(null);
             setEditForm({
               title: "",
@@ -184,29 +172,26 @@ function Products() {
               image: "",
             });
             setEditMessage("Product updated successfully!");
-            refetch();
-          } catch {
-            alert("Error updating product.");
+            fetchProducts();
+          } catch (err) {
+            alert("Error updating product: " + err.message);
           }
         }}
       />
-      {/* Delete Confirm Modal */}
-      {/* Delete Confirm Modal with delete logic */}
+      {/* Delete Confirm Modal with delete logic using Firestore */}
       <DeleteConfirmModal
         show={showDeleteConfirm}
         onCancel={() => setShowDeleteConfirm(false)}
         onDelete={async () => {
-          // Handle product delete
+          // Handle product delete in Firestore
           try {
-            await fetch(
-              `https://fakestoreapi.com/products/${editProduct.id}`,
-              { method: "DELETE" }
-            );
+            const productRef = doc(db, 'products', editProduct.id);
+            await deleteDoc(productRef);
             setEditProduct(null);
             setEditMessage("Product deleted successfully!");
-            refetch();
-          } catch {
-            alert("Error deleting product.");
+            fetchProducts();
+          } catch (err) {
+            alert("Error deleting product: " + err.message);
           }
           setShowDeleteConfirm(false);
         }}
